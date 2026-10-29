@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 
 import { WalletTopupPanel, type TopupCategory } from "@/components/layout/workspace-wallet-topup";
+import { closeReturnedPaymentCheckoutPopup, paymentCheckoutReturnedOrderId } from "@/components/payment/payment-checkout-window";
 import { usePaymentOrderFlow } from "@/components/payment/use-payment-order-flow";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
@@ -45,9 +46,22 @@ export function WorkspaceWalletHost() {
         return () => window.removeEventListener(WORKSPACE_WALLET_OPEN_EVENT, handleOpen);
     }, []);
 
+    // 支付小窗口回到本站后发来订单号：买家可能已关掉确认框，这里重新展示该订单结果并刷新余额。
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            const paymentOrderId = paymentCheckoutReturnedOrderId(event);
+            if (paymentOrderId) openWorkspaceWallet({ paymentOrderId });
+        };
+        window.addEventListener("message", handleMessage);
+        return () => window.removeEventListener("message", handleMessage);
+    }, []);
+
     useEffect(() => {
         if (pathname !== "/wallet") return;
         const params = new URLSearchParams(search);
+        // 收银台小窗口里付完点「完成」会回到这里：通知打开它的页面并关掉小窗口。关不掉时照常打开钱包。
+        const returnedOrderId = params.get("paymentOrder");
+        if (returnedOrderId) closeReturnedPaymentCheckoutPopup(returnedOrderId);
         openWorkspaceWallet({
             paymentOrderId: params.get("paymentOrder") || undefined,
             paymentInvalid: params.get("payment") === "invalid",
@@ -213,7 +227,7 @@ export function WorkspaceWalletModal({
             message.error("该套餐当前不可购买，请刷新后重试");
             return;
         }
-        await payment.start(selectedProduct.id, selectedProvider.id);
+        await payment.start(selectedProduct.id, selectedProvider.id, { checkoutWindow: selectedProvider.checkoutWindow });
     };
 
     // 定位到某类套餐：滚动到分组，并在当前选中项不属于该类时改选该类第一个可买套餐。

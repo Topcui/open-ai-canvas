@@ -29,6 +29,7 @@ type PaymentProviderView struct {
 	Name              string `json:"name"`
 	Icon              string `json:"icon"`
 	CheckoutMode      string `json:"checkoutMode"`
+	CheckoutWindow    string `json:"checkoutWindow,omitempty"`
 	Enabled           bool   `json:"enabled"`
 	PluginEnabled     bool   `json:"pluginEnabled"`
 	Configured        bool   `json:"configured"`

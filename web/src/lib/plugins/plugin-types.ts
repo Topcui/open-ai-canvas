@@ -94,6 +94,7 @@ export type PluginPaymentProviderContribution = {
     label: string;
     icon: string;
     checkoutMode: "qr_code" | "redirect";
+    checkoutWindow?: "page" | "popup";
     expiryPolicy: { defaultMinutes: number; minMinutes: number; maxMinutes: number };
 };
 export type PluginCanvasNodeContribution = {

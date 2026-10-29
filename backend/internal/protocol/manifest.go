@@ -411,6 +411,15 @@ func validatePaymentProviderContributions(manifest Manifest) error {
 		default:
 			return fmt.Errorf("payment provider contribution %q has unsupported checkout mode %q", provider.ID, provider.CheckoutMode)
 		}
+		switch provider.CheckoutWindow {
+		case "", PaymentCheckoutWindowPage:
+		case PaymentCheckoutWindowPopup:
+			if provider.CheckoutMode != "redirect" {
+				return fmt.Errorf("payment provider contribution %q can only use popup checkout window with redirect checkout mode", provider.ID)
+			}
+		default:
+			return fmt.Errorf("payment provider contribution %q has unsupported checkout window %q", provider.ID, provider.CheckoutWindow)
+		}
 		policy := provider.ExpiryPolicy
 		if policy.MinMinutes <= 0 || policy.DefaultMinutes < policy.MinMinutes || policy.MaxMinutes < policy.DefaultMinutes {
 			return fmt.Errorf("payment provider contribution %q has invalid expiry policy", provider.ID)

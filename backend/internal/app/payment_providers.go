@@ -220,7 +220,7 @@ func (s *Service) UpdatePaymentProviderConfig(actor *model.User, providerID stri
 }
 
 func (s *Service) paymentProviderView(descriptor payment.Descriptor) (PaymentProviderView, *model.PaymentProviderConfig, error) {
-	view := PaymentProviderView{ID: descriptor.ID, PluginID: descriptor.PluginID, Name: descriptor.Name, Icon: descriptor.Icon, CheckoutMode: descriptor.CheckoutMode}
+	view := PaymentProviderView{ID: descriptor.ID, PluginID: descriptor.PluginID, Name: descriptor.Name, Icon: descriptor.Icon, CheckoutMode: descriptor.CheckoutMode, CheckoutWindow: descriptor.CheckoutWindow}
 	if manifest, ok := s.paymentManifestForProvider(descriptor.ID); ok {
 		if policy, found := paymentExpiryPolicy(manifest, descriptor.ID); found {
 			view.CloseAfterMinutes = policy.DefaultMinutes

@@ -27,7 +27,7 @@ var (
 func DescriptorFromManifest(manifest protocol.Manifest, provider protocol.ManifestPaymentProvider) Descriptor {
 	return Descriptor{
 		ID: provider.ID, PluginID: manifest.Metadata.ID, PluginVersion: manifest.Metadata.Version, Name: provider.Label,
-		Icon: provider.Icon, CheckoutMode: provider.CheckoutMode,
+		Icon: provider.Icon, CheckoutMode: provider.CheckoutMode, CheckoutWindow: provider.CheckoutWindow,
 		IdentityFields:      append([]string(nil), provider.IdentityFields...),
 		NotificationSuccess: NotificationResponse{Status: provider.NotificationSuccess.Status, ContentType: provider.NotificationSuccess.ContentType, Body: provider.NotificationSuccess.Body},
 		NotificationFailure: NotificationResponse{Status: provider.NotificationFailure.Status, ContentType: provider.NotificationFailure.ContentType, Body: provider.NotificationFailure.Body},

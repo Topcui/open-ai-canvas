@@ -1,11 +1,16 @@
 import { ApiError, compactApiParams, http } from "@/services/api/request";
 
+/** 跳转支付的打开方式：page 整页跳转（默认）；popup 在浏览器小窗口打开收银台，当前页保留并轮询结果。 */
+export type PaymentCheckoutWindow = "page" | "popup";
+
 export type PaymentProvider = {
     id: "wechat-native" | "alipay-page-pay" | string;
     pluginId: string;
     name: string;
     icon: string;
     checkoutMode: "qr_code" | "redirect";
+    /** 只对 redirect 生效，插件清单未声明时为空，按整页跳转处理。 */
+    checkoutWindow?: PaymentCheckoutWindow;
     enabled: boolean;
     pluginEnabled: boolean;
     configured: boolean;

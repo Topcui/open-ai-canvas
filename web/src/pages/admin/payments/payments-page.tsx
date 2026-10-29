@@ -450,7 +450,13 @@ export default function AdminPaymentsPage() {
                 </div>
             ),
         },
-        { title: "支付方式", dataIndex: "checkoutMode", width: 120, align: "center", render: (value) => (value === "qr_code" ? "扫码支付" : "网站跳转") },
+        {
+            title: "支付方式",
+            dataIndex: "checkoutMode",
+            width: 120,
+            align: "center",
+            render: (value, provider) => (value === "qr_code" ? "扫码支付" : provider.checkoutWindow === "popup" ? "小窗口跳转" : "网站跳转"),
+        },
         {
             title: "状态",
             key: "status",

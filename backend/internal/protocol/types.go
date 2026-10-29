@@ -333,15 +333,23 @@ type ManifestSMSProvider struct {
 }
 
 type ManifestPaymentProvider struct {
-	ID                  string                      `json:"id"`
-	Label               string                      `json:"label"`
-	Icon                string                      `json:"icon"`
-	CheckoutMode        string                      `json:"checkoutMode"`
+	ID           string `json:"id"`
+	Label        string `json:"label"`
+	Icon         string `json:"icon"`
+	CheckoutMode string `json:"checkoutMode"`
+	// CheckoutWindow 只对 redirect 生效：空值或 page 整页跳转；popup 在浏览器小窗口打开收银台，
+	// 当前页保留并轮询订单。旧插件不声明时行为不变。
+	CheckoutWindow      string                      `json:"checkoutWindow,omitempty"`
 	ExpiryPolicy        ManifestPaymentExpiryPolicy `json:"expiryPolicy"`
 	IdentityFields      []string                    `json:"identityFields,omitempty"`
 	NotificationSuccess ManifestPaymentResponse     `json:"notificationSuccess,omitempty"`
 	NotificationFailure ManifestPaymentResponse     `json:"notificationFailure,omitempty"`
 }
+
+const (
+	PaymentCheckoutWindowPage  = "page"
+	PaymentCheckoutWindowPopup = "popup"
+)
 
 type ManifestPaymentExpiryPolicy struct {
 	DefaultMinutes int `json:"defaultMinutes"`

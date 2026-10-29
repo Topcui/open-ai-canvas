@@ -138,3 +138,48 @@ func zipPluginPackage(t *testing.T, files map[string][]byte) []byte {
 	}
 	return buffer.Bytes()
 }
+
+// checkoutWindow 是可选项：不写等同整页跳转；popup 只允许和 redirect 一起用，避免扫码支付被误开成空白小窗口。
+func TestValidatePaymentProviderCheckoutWindow(t *testing.T) {
+	provider := func(mode, window string) Manifest {
+		return Manifest{Contributes: ManifestContributions{PaymentProviders: []ManifestPaymentProvider{{
+			ID: "window-pay", Label: "Window Pay", Icon: "brand:test", CheckoutMode: mode, CheckoutWindow: window,
+			ExpiryPolicy: ManifestPaymentExpiryPolicy{DefaultMinutes: 30, MinMinutes: 5, MaxMinutes: 1440},
+		}}}}
+	}
+	for _, accepted := range []struct{ mode, window string }{
+		{"redirect", ""}, {"redirect", PaymentCheckoutWindowPage}, {"redirect", PaymentCheckoutWindowPopup},
+		{"qr_code", ""}, {"qr_code", PaymentCheckoutWindowPage},
+	} {
+		if err := validatePaymentProviderContributions(provider(accepted.mode, accepted.window)); err != nil {
+			t.Fatalf("mode %q window %q rejected: %v", accepted.mode, accepted.window, err)
+		}
+	}
+	for _, rejected := range []struct{ mode, window string }{
+		{"qr_code", PaymentCheckoutWindowPopup}, {"redirect", "iframe"}, {"redirect", "POPUP"},
+	} {
+		if err := validatePaymentProviderContributions(provider(rejected.mode, rejected.window)); err == nil {
+			t.Fatalf("mode %q window %q accepted", rejected.mode, rejected.window)
+		}
+	}
+}
+
+func TestParsePluginPackageKeepsPaymentCheckoutWindow(t *testing.T) {
+	manifest := []byte(`{
+        "apiVersion":"yingce.plugin/v1",
+        "id":"popup-payment",
+        "name":"Popup Payment",
+        "version":"1.0.0",
+        "author":"Test",
+        "enabled":true,
+        "runtime":{"backend":"rpc","backendEntry":"backend/provider"},
+        "contributes":{"paymentProviders":[{"id":"popup-pay","label":"Popup","icon":"brand:test","checkoutMode":"redirect","checkoutWindow":"popup","expiryPolicy":{"defaultMinutes":30,"minMinutes":5,"maxMinutes":1440}}]}
+    }`)
+	pkg, err := ParsePluginPackage(zipPluginPackage(t, map[string][]byte{"manifest.json": manifest, "backend/provider-linux-amd64": []byte("binary")}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := pkg.Manifest.Contributes.PaymentProviders[0].CheckoutWindow; got != PaymentCheckoutWindowPopup {
+		t.Fatalf("checkoutWindow = %q, want popup", got)
+	}
+}

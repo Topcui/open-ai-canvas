@@ -22,6 +22,7 @@ type Descriptor struct {
 	Name                string               `json:"name"`
 	Icon                string               `json:"icon"`
 	CheckoutMode        string               `json:"checkoutMode"`
+	CheckoutWindow      string               `json:"checkoutWindow,omitempty"`
 	IdentityFields      []string             `json:"identityFields,omitempty"`
 	NotificationSuccess NotificationResponse `json:"notificationSuccess,omitempty"`
 	NotificationFailure NotificationResponse `json:"notificationFailure,omitempty"`
