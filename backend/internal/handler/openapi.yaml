@@ -31,6 +31,8 @@ tags:
     description: 用户反馈与管理员收件箱
   - name: referral
     description: 推广中心：推广码、邀请记录与返佣
+  - name: open
+    description: 平台开放接口：用 API Key 调用站内模型，不读登录 Cookie
 paths:
   /projects/{id}/assets/{assetId}/image:
     put:
@@ -1753,6 +1755,231 @@ paths:
             text/event-stream:
               schema:
                 type: string
+  /api-keys:
+    get:
+      tags: [auth]
+      summary: 列出当前用户的平台 API Key
+      description: 只认登录 Cookie，不能用 API Key 调用。不返回明文和哈希，按创建时间倒序。
+      responses:
+        "200":
+          description: 成功信封 data={keys,limit}
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [keys, limit]
+                        properties:
+                          keys:
+                            type: array
+                            items: {$ref: "#/components/schemas/UserAPIKey"}
+                          limit: {type: integer, description: 每人同时有效的 Key 上限}
+        "401": {$ref: "#/components/responses/Error"}
+    post:
+      tags: [auth]
+      summary: 新建平台 API Key
+      description: 只认登录 Cookie。每人最多 10 个有效 Key，每分钟 10 次。明文 secret 只在本次响应返回，响应带 Cache-Control no-store。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string, minLength: 1, maxLength: 40}
+      responses:
+        "200":
+          description: 成功信封 data={key,secret}
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [key, secret]
+                        properties:
+                          key: {$ref: "#/components/schemas/UserAPIKey"}
+                          secret: {type: string, description: sk- 加 64 位十六进制，只返回这一次}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+  /api-keys/{id}:
+    delete:
+      tags: [auth]
+      summary: 删除平台 API Key
+      description: 只认登录 Cookie。软删除，使用该 Key 的请求立即失效。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200": {$ref: "#/components/responses/Envelope"}
+        "401": {$ref: "#/components/responses/Error"}
+        "404": {$ref: "#/components/responses/Error"}
+  /open/v1/models:
+    get:
+      tags: [open]
+      security: [{platformAPIKey: []}, {platformAPIKeyHeader: []}]
+      summary: 开放接口可调用的模型
+      description: 不套业务信封。只列当前用户分组可用、已定价且开放接口支持的模型；同名模型只列一次。
+      responses:
+        "200":
+          description: OpenAI 模型列表格式
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [object, data, has_more]
+                properties:
+                  object: {type: string, enum: [list]}
+                  data:
+                    type: array
+                    items: {$ref: "#/components/schemas/PlatformModel"}
+                  has_more: {type: boolean}
+                  first_id: {type: string}
+                  last_id: {type: string}
+        "401": {$ref: "#/components/responses/PlatformError"}
+        "429": {$ref: "#/components/responses/PlatformError"}
+  /open/v1/messages:
+    post:
+      tags: [open]
+      security: [{platformAPIKey: []}, {platformAPIKeyHeader: []}]
+      summary: Claude Messages
+      description: 仅 claude-api 协议的文本模型。请求体原样交给系统渠道中转，权限、频控、预授权、流式透传和按用量结算与站内一致；model 为产品模型标识，须与上游模型 ID 相同。本层错误为 Claude 错误格式，中转内部的错误保持站内信封。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model]
+              additionalProperties: true
+              properties:
+                model: {type: string}
+                stream: {type: boolean}
+      responses:
+        "200":
+          description: Claude Messages 响应；stream=true 时为 text/event-stream
+        "400": {$ref: "#/components/responses/PlatformError"}
+        "401": {$ref: "#/components/responses/PlatformError"}
+        "403": {$ref: "#/components/responses/PlatformError"}
+        "404": {$ref: "#/components/responses/PlatformError"}
+        "409": {$ref: "#/components/responses/PlatformError"}
+        "429": {$ref: "#/components/responses/PlatformError"}
+  /open/v1/messages/count_tokens:
+    post:
+      tags: [open]
+      security: [{platformAPIKey: []}, {platformAPIKeyHeader: []}]
+      summary: 估算 Claude Messages 输入 Token
+      description: 本地估算，口径与积分预授权一致；不调用上游、不计费，每人每分钟 120 次。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model]
+              additionalProperties: true
+              properties:
+                model: {type: string}
+      responses:
+        "200":
+          description: 估算结果
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [input_tokens]
+                properties:
+                  input_tokens: {type: integer, format: int64}
+        "400": {$ref: "#/components/responses/PlatformError"}
+        "401": {$ref: "#/components/responses/PlatformError"}
+        "404": {$ref: "#/components/responses/PlatformError"}
+        "429": {$ref: "#/components/responses/PlatformError"}
+  /open/v1/chat/completions:
+    post:
+      tags: [open]
+      security: [{platformAPIKey: []}, {platformAPIKeyHeader: []}]
+      summary: OpenAI Chat Completions
+      description: 仅 chat-completion 协议的文本模型。请求体原样交给系统渠道中转，其余同 /open/v1/messages；本层错误为 OpenAI 错误格式。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model]
+              additionalProperties: true
+              properties:
+                model: {type: string}
+                stream: {type: boolean}
+      responses:
+        "200":
+          description: Chat Completions 响应；stream=true 时为 text/event-stream
+        "400": {$ref: "#/components/responses/PlatformError"}
+        "401": {$ref: "#/components/responses/PlatformError"}
+        "403": {$ref: "#/components/responses/PlatformError"}
+        "404": {$ref: "#/components/responses/PlatformError"}
+        "409": {$ref: "#/components/responses/PlatformError"}
+        "429": {$ref: "#/components/responses/PlatformError"}
+  /open/v1/tasks:
+    post:
+      tags: [open]
+      security: [{platformAPIKey: []}, {platformAPIKeyHeader: []}]
+      summary: 创建生图或生视频任务
+      description: 转换为创作页同样的 POST /api/tasks 输入，准入、定价、冻结积分和执行复用任务链路；与站内共用任务创建频控。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PlatformTaskRequest"}
+      responses:
+        "200":
+          description: 已创建的任务
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PlatformTask"}
+        "400": {$ref: "#/components/responses/PlatformError"}
+        "401": {$ref: "#/components/responses/PlatformError"}
+        "403": {$ref: "#/components/responses/PlatformError"}
+        "404": {$ref: "#/components/responses/PlatformError"}
+        "409": {$ref: "#/components/responses/PlatformError"}
+        "429": {$ref: "#/components/responses/PlatformError"}
+  /open/v1/tasks/{id}:
+    get:
+      tags: [open]
+      security: [{platformAPIKey: []}, {platformAPIKeyHeader: []}]
+      summary: 查询生图或生视频任务
+      description: 只返回当前用户的生图、生视频任务；成功时 outputs 带签名的下载地址。
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: 任务视图
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PlatformTask"}
+        "401": {$ref: "#/components/responses/PlatformError"}
+        "404": {$ref: "#/components/responses/PlatformError"}
+        "503": {$ref: "#/components/responses/PlatformError"}
+  /open/v1/balance:
+    get:
+      tags: [open]
+      security: [{platformAPIKey: []}, {platformAPIKeyHeader: []}]
+      summary: 查询积分余额
+      responses:
+        "200":
+          description: 可用与冻结中的积分
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PlatformBalance"}
+        "401": {$ref: "#/components/responses/PlatformError"}
   /openapi.yaml:
     get:
       tags: [meta]
@@ -2546,6 +2773,15 @@ components:
       type: apiKey
       in: cookie
       name: open_ai_canvas_session
+    platformAPIKey:
+      type: http
+      scheme: bearer
+      description: 平台 API Key，仅用于 /open/v1/
+    platformAPIKeyHeader:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: Claude 客户端写法，与 Bearer 等价
   schemas:
     FeedbackAttachment:
       type: object
@@ -2621,6 +2857,110 @@ components:
         reason: {type: string}
         message: {type: string}
         createdAt: {type: string, format: date-time}
+    UserAPIKey:
+      type: object
+      required: [id, userId, name, keyPrefix, keyLast4, source, createdAt, updatedAt]
+      properties:
+        id: {type: string}
+        userId: {type: string}
+        name: {type: string}
+        keyPrefix: {type: string, description: Key 开头几位，仅用于展示}
+        keyLast4: {type: string, description: Key 末 4 位，仅用于展示}
+        source: {type: string, enum: [manual, login]}
+        expiresAt: {type: string, format: date-time, nullable: true}
+        lastUsedAt: {type: string, format: date-time, nullable: true, description: 同一 Key 一分钟内最多更新一次}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    PlatformModel:
+      type: object
+      required: [id, object, type, display_name, capability, endpoint, price_tiers]
+      properties:
+        id: {type: string, description: 产品模型标识，即请求里的 model}
+        object: {type: string, enum: [model]}
+        type: {type: string, enum: [model]}
+        display_name: {type: string}
+        owned_by: {type: string}
+        created: {type: integer, format: int64}
+        capability: {type: string, enum: [text, image, video]}
+        endpoint: {type: string, enum: [/v1/messages, /v1/chat/completions, /v1/tasks]}
+        price_tiers: {type: array, items: {type: object}}
+    PlatformTaskRequest:
+      type: object
+      required: [model, prompt]
+      properties:
+        model: {type: string}
+        prompt: {type: string, minLength: 1}
+        size: {type: string, description: "画幅比例，如 1:1、16:9"}
+        resolution: {type: string, description: 图片分辨率或视频画质，如 1K、720p}
+        quality: {type: string, description: 仅图片}
+        seconds: {type: integer, minimum: 0, description: 仅视频}
+        generate_audio: {type: boolean, description: 仅视频}
+        images:
+          type: array
+          items: {type: string, format: uri}
+          description: 公网 http(s) 参考图；与首尾帧合计最多 16 个
+        first_frame: {type: string, format: uri, description: 仅视频}
+        last_frame: {type: string, format: uri, description: 仅视频}
+    PlatformTaskOutput:
+      type: object
+      required: [type, resource_id, url]
+      properties:
+        type: {type: string, enum: [image, video]}
+        resource_id: {type: string}
+        url: {type: string, description: 带签名、有时效的下载地址}
+        mime_type: {type: string}
+        width: {type: integer}
+        height: {type: integer}
+        duration_ms: {type: integer, format: int64}
+        expires_at: {type: string, format: date-time}
+    PlatformTask:
+      type: object
+      required: [id, object, type, model, status, progress, outputs, created_at]
+      properties:
+        id: {type: string}
+        object: {type: string, enum: [task]}
+        type: {type: string, enum: [image, video]}
+        model: {type: string}
+        status: {type: string, enum: [queued, running, succeeded, failed, cancelled]}
+        progress: {type: integer}
+        error: {type: string}
+        outputs:
+          type: array
+          items: {$ref: "#/components/schemas/PlatformTaskOutput"}
+        created_at: {type: string, format: date-time}
+        completed_at: {type: string, format: date-time}
+    PlatformBalance:
+      type: object
+      required: [object, available_credits, reserved_credits, available_microcredits, reserved_microcredits]
+      properties:
+        object: {type: string, enum: [balance]}
+        available_credits: {type: number}
+        reserved_credits: {type: number}
+        available_microcredits: {type: integer, format: int64}
+        reserved_microcredits: {type: integer, format: int64}
+    PlatformError:
+      description: /open/v1/messages 与 count_tokens 为 Claude 错误格式，其余为 OpenAI 错误格式
+      oneOf:
+        - type: object
+          required: [type, error]
+          properties:
+            type: {type: string, enum: [error]}
+            error:
+              type: object
+              required: [type, message]
+              properties:
+                type: {type: string}
+                message: {type: string}
+        - type: object
+          required: [error]
+          properties:
+            error:
+              type: object
+              required: [message, type]
+              properties:
+                message: {type: string}
+                type: {type: string}
+                code: {type: string, description: 与站内 reason 相同}
     ToolMutation:
       type: object
       required: [type, label, prompt]
@@ -3058,3 +3398,9 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
+    PlatformError:
+      description: 开放接口错误，格式随接口协议
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/PlatformError"

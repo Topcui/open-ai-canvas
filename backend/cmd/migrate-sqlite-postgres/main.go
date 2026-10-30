@@ -383,6 +383,7 @@ func migrations() []tableMigration {
 		migrateTable[model.DramaJob]("drama_jobs"),
 		migrateTable[model.AuthSession]("auth_sessions"),
 		migrateTable[model.LoginLog]("login_logs"),
+		migrateTable[model.UserAPIKey]("user_api_keys"),
 		migrateTable[model.UserIdentity]("user_identities"),
 		migrateTable[model.OAuthState]("o_auth_states"),
 		migrateTable[model.EmailVerificationCode]("email_verification_codes"),

@@ -32,6 +32,15 @@ description: 从产品功能快速定位主要代码入口
 - 前端：`web/src/services/api/login-logs.ts`、`pages/admin/login-logs/`；菜单和懒加载接入 `admin-shell.tsx`、`router.tsx`。
 - 回归：auth/handler/database 的 `login_logs*_test.go`，前端 `web/test/login-log-device.test.ts`。
 
+## 平台 API Key 与开放接口
+
+- 持久化：`backend/internal/model/models_api_key.go`、`repository/repository_api_keys.go`；schema v78 在 `database/migrations.go`，`database/schema.go` 与 `cmd/migrate-sqlite-postgres/main.go` 登记表。
+- Key 管理与认证：`app/api_keys.go`（创建、列表、删除、按哈希认 Key）→ `service/aliases_api_keys.go` → `handler/api_keys.go`（`/api/api-keys`，只认 Cookie）。
+- 开放接口：`handler/platform_api.go` 负责认 Key、IP 频控和协议格式的错误，文本交给 `handler/auth.go` 的 `proxySystemRequestPath`；`app/platform_api.go` 负责模型目录过滤、按产品模型标识解析唯一渠道、任务请求转换（复用 `CreateTask`）和结果下载地址签发。
+- 跨域：`cmd/server/cors_platform_api.go`，在 `cmd/server/main.go` 的 `cors()` 开头处理 `/api/open/`。
+- 前端：`web/src/services/api/api-keys.ts`、`web/src/lib/platform-api.ts`（接入地址、按协议分组的模型、Claude Code 配置文本）、`pages/settings/api-keys-pane.tsx`；设置页入口在 `pages/settings/index.tsx`。
+- 回归：`app/api_keys_test.go`、`app/platform_api_test.go`、`handler/platform_api_test.go`、`cmd/server/cors_platform_api_test.go`、`database/user_api_keys_migration_test.go`，前端 `web/test/platform-api.test.ts`。
+
 ## 可美 KM Seedream
 
 - 声明式请求、响应与参数合同：`plugin-packages/km-kemei-seedream/manifest.json`、`docs/interface.md`；分发包：`plugin-packages/km-kemei-seedream.yingce-plugin`。

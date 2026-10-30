@@ -223,6 +223,15 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 - [ ] 浏览器验收：全民模式下普通用户账户菜单出现「推广中心」，复制链接后用无痕窗口注册，邀请记录出现脱敏名称；指定推广人模式下非推广人看不到入口，直接访问 `/referral` 被带回首页。
 - [ ] 支付联调：被邀请用户完成一笔积分充值，推广人余额增加对应比例积分，钱包流水显示「推广返佣」；重复支付通知不重复返佣。
 - [ ] PostgreSQL：升级到 Schema 72 后既有用户 `is_promoter` 为 `false`，推广统计与列表查询正常。
+## 平台 API Key 与开放接口
+
+- 已实现：Schema 78 新增 `user_api_keys`；设置页「API Key」分区创建、列出、删除 Key，并显示接入地址与 Claude Code 配置示例。开放接口 `/api/open/v1/` 提供 `models`、`messages`、`messages/count_tokens`、`chat/completions`、`tasks`、`tasks/:id`、`balance`；文本复用系统渠道中转，生图、生视频复用任务链路，账单场景 `platform_api`。
+- 已验证：后端 `go test ./internal/app -run 'Platform|UserAPIKey'`、`./internal/handler -run 'PlatformAPI|UserAPIKeyRoutes'`、`./cmd/server -run 'PlatformAPICORS|AllowedOrigin|ParseCORS'`、`./internal/database`；前端 `bun run typecheck`、`bun run lint`、`bun test test/platform-api.test.ts`。PostgreSQL Docker 部署实测：迁移到 78；Claude 流式与工具调用、OpenAI 流式与非流式、`count_tokens`、`models`、`balance` 正常；Claude Code 2.1 用 Bash 工具完成一次读写；生图与 5 秒视频完成，签名下载地址可打开，账单按用量或任务价结算；跨域预检通过，站内接口仍拒绝其他来源；删除 Key 后立即 401。
+- [ ] 浏览器验收：设置页新建 Key 后弹窗显示完整 Key 和配置示例，关闭后列表只显示前后几位；达到 10 个时新建按钮禁用；删除确认后列表刷新；明暗主题与窄屏下地址行不溢出。
+- [ ] OpenAI 兼容桌面客户端（如 Cherry Studio）：填 `/api/open/v1` 与 Key 后能列出模型并流式对话。
+- [ ] 前后端分开部署：设置 `VITE_CANVAS_BACKEND_URL` 时，设置页显示的接入地址指向后端。
+- [ ] 计费核对：Claude 返回的 `cache_creation_input_tokens` 目前不进入结算，`input_tokens` 还会按 OpenAI 口径再减去 `cache_read_input_tokens`；Claude Code 这类带缓存标记的客户端会少计输入，需另行确认结算口径。
+
 ## 短剧：剧情段弹窗卡顿、参考图调整、卡在生成视频中、头部压缩与 MiniMax H3 首尾帧
 
 - 已修复（卡顿）：制作台弹窗不再使用全屏磨砂遮罩（集显上被遮住的卡片加载动画会让 backdrop-filter 每帧重算），改为纯色遮罩，弹窗打开时暂停下层分镜卡片动画；分镜卡片改为 memo 组件，轮询刷新与打开弹窗时只重绘有变化的段。

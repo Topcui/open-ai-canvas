@@ -37,6 +37,7 @@ func Models() []any {
 		&model.UserAvatar{},
 		&model.AuthSession{},
 		&model.LoginLog{},
+		&model.UserAPIKey{},
 		&model.UserIdentity{},
 		&model.OAuthState{},
 		&model.EmailVerificationCode{},

@@ -591,6 +591,42 @@ Agent 已不再注入、召回或写入下列经验条目，记忆设置页只�
 
 `POST /api/admin/channels/:id/duplicate` 需要管理员权限，会复制指定系统渠道的连接配置、加密凭证、请求头、模型和价格档，生成新的渠道与模型 ID；复制渠道名称自动追加“ - 副本”。原渠道及其前台供应线路不受影响。
 
+## 平台 API Key 与开放接口
+
+用户在「设置 → API Key」创建 Key，在 Claude Code、OpenAI 兼容客户端或自己的程序里调用站内模型，扣同一个积分账户，价格与站内一致。
+
+管理 Key 的接口只认登录 Cookie，不能用 API Key 调用：
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /api/api-keys` | `data={keys,limit}`。`keys` 含 `id`、`name`、`keyPrefix`、`keyLast4`、`source`、`expiresAt`、`lastUsedAt`、`createdAt`，不含明文和哈希 |
+| `POST /api/api-keys` | `{ name }`，名称 1–40 字；`data={key,secret}`，`secret` 只在这次响应出现，响应带 `Cache-Control: no-store`。每人最多 10 个有效 Key，超出返回 400；每人每分钟 10 次 |
+| `DELETE /api/api-keys/:id` | 软删除，立即失效；不存在或不属于当前用户返回 404 |
+
+开放接口在 `/api/open/v1/` 下，只认 `Authorization: Bearer <key>` 或 `x-api-key: <key>`，不读取登录 Cookie，也不接受 URL 参数里的 Key。Key 为 `sk-` 加 64 位十六进制，库中只存 SHA-256。Key 不存在、已删除或已过期返回 401；账号被禁用返回 403。成功响应不套业务信封，直接返回 Claude / OpenAI 的标准格式：
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /open/v1/models` | OpenAI 列表格式 `{object:"list",data,has_more,first_id,last_id}`；每项含 `id`（产品模型标识）、`type`、`display_name`、`capability`、`endpoint`、`price_tiers`。只列当前用户分组可用、已定价且开放接口支持的模型 |
+| `POST /open/v1/messages` | Claude Messages，仅 `claude-api` 协议的文本模型 |
+| `POST /open/v1/messages/count_tokens` | 本地估算 `{input_tokens}`，口径与积分预授权一致；不调用上游、不计费，每人每分钟 120 次 |
+| `POST /open/v1/chat/completions` | OpenAI Chat Completions，仅 `chat-completion` 协议的文本模型 |
+| `POST /open/v1/tasks` | 生图、生视频，见下文 |
+| `GET /open/v1/tasks/:id` | 只能查当前用户的生图、生视频任务 |
+| `GET /open/v1/balance` | `{object:"balance",available_credits,reserved_credits,available_microcredits,reserved_microcredits}` |
+
+模型解析：请求体的 `model` 是渠道模型的产品模型标识，在用户的模型目录（`ModelCatalogForUser`，已按分组、启用和定价过滤）里查找，必须恰好对应一个渠道：找不到或分组不可用返回 404；同名出现在多个渠道返回 409，不按价格或排序替用户选线路；协议与接口不符返回 400，并提示应调用的接口。两种文本格式之间不做转换。
+
+文本请求把原始请求体交给系统渠道中转（`proxySystemRequestPath`），权限、频控、请求体上限、积分预授权、流式透传和按用量结算与站内一致，账单 `scene=platform_api`；客户端自带的 `X-Idempotency-Key` 不参与计费。中转把请求体的 `model` 原样发给上游，所以产品模型标识与上游模型 ID 不同的文本模型返回 400。`anthropic-beta` 请求头不转发。
+
+任务请求体：`model`、`prompt`（必填），`size`、`resolution`，图片可带 `quality`，视频可带 `seconds`、`generate_audio`、`first_frame`、`last_frame`，两者都可带 `images`。参考素材只收公网 `http(s)` 地址，合计最多 16 个。服务端转换为创作页同样的 `POST /api/tasks` 输入：图片为 `canvas_image`，每次 1 张；视频按素材推导 `text_to_video`、`image_to_video` 或 `reference_to_video`，规则同[视频工作台的生成模式](#视频工作台的生成模式)。准入、定价、冻结积分和执行复用任务链路。任务视图为 `{id,object:"task",type,model,status,progress,error,outputs,created_at,completed_at}`；成功时 `outputs[]` 含 `type`、`resource_id`、带签名的下载地址 `url` 和 `expires_at`，本地存储签出的相对地址按「服务器访问地址」补全；签不出地址返回 503。
+
+错误：本层的错误使用对应协议的标准格式，Claude 为 `{type:"error",error:{type,message}}`，OpenAI 为 `{error:{message,type,code}}`（`code` 取 `reason`）；系统渠道中转和任务准入内部的错误保持站内信封。频控：认 Key 前按来源 IP 每分钟 600 次，认出用户后沿用系统渠道中转和任务创建的按用户频控；超限返回 429 和 `Retry-After`。
+
+跨域：`/api/open/` 不做站点来源校验，允许任意来源但不允许携带凭据，预检按请求回显 `Access-Control-Request-Headers`，并暴露 `Retry-After`、`X-Request-ID`。这些接口不读 Cookie，放开来源不会让其他网站借用登录态。
+
+Claude Code 的 `ANTHROPIC_BASE_URL` 填 `https://<站点域名>/api/open`（客户端自行补 `/v1/messages`）；OpenAI 兼容客户端的 Base URL 填 `https://<站点域名>/api/open/v1`。前后端分开部署时以后端地址为准，设置页按 `VITE_CANVAS_BACKEND_URL` 生成。
+
 ## 信封
 
 成功：

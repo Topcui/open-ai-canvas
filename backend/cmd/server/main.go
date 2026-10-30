@@ -242,6 +242,9 @@ func cors() (gin.HandlerFunc, error) {
 		return nil, err
 	}
 	return func(c *gin.Context) {
+		if platformAPICORS(c) {
+			return
+		}
 		origin := strings.TrimSpace(c.GetHeader("Origin"))
 		if origin != "" && !allowedOriginWithPolicy(c, origin, policy) {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"code": http.StatusForbidden, "data": nil, "msg": "不允许的跨域来源"})
